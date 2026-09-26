@@ -85,3 +85,6 @@ desktop.ini
 *.db
 *.pid
 *.seed
+
+# 本地一键联调脚本的 pid 与日志
+.run/

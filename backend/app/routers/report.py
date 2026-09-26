@@ -12,7 +12,7 @@ router = APIRouter(prefix="/api/report", tags=["检测报告"])
 
 service = ReportService()
 
-LIST_FIELDS = ["报告编号", "关联任务", "编制人", "审核人", "签发人", "报告日期", "报告类型", "报告状态"]
+LIST_FIELDS = ["报告编号", "关联任务", "编制人", "审核人", "签发人", "报告日期", "报告类型", "报告结论", "报告状态"]
 STATUSES = ["待编制", "待审核", "待签发", "已签发"]
 
 
@@ -28,6 +28,14 @@ def list_entries(
         raise HTTPException(status_code=400, detail="每页最多 200 条，请缩小分页范围")
     items, total = service.list_entries(keyword=keyword, status=status, page=page, size=size)
     return PageResult(items=items, total=total, page=page, size=size)
+
+
+# 注意：/export 必须排在 /{entry_id} 之前，否则会被当成 entry_id="export" 拦截报 422。
+@router.get("/export")
+def export_entries() -> dict[str, Any]:
+    """导出检测报告清单：返回当前过滤条件下的全量数据。"""
+    items, total = service.list_entries(page=1, size=10000)
+    return {"module": "report", "total": total, "items": items}
 
 
 @router.get("/{entry_id}", response_model=dict)
@@ -50,16 +58,13 @@ def create_entry(payload: EntryPayload) -> ActionResult:
 
 @router.post("/{entry_id}/actions", response_model=ActionResult)
 def run_action(entry_id: int, payload: EntryPayload) -> ActionResult:
-    """对单条检测报告执行编制报告、审核通过、签发报告；不允许的动作会被拦下并说明原因。"""
+    """对单条检测报告执行编制报告、审核通过、签发报告；不允许的动作会被拦下并说明原因。
+
+    请求体形如 ``{"values": {"action": "签发报告", "签发人": "周签发", "报告结论": "合格"}}``；
+    为兼容前端早期写法，也接受 action 直接放在 values 里。
+    """
     action = str(payload.values.get("action") or "").strip()
-    entry, message = service.run_action(entry_id, action)
+    entry, message = service.run_action(entry_id, action, payload.values)
     if entry is None:
         return ActionResult(ok=False, message=message)
     return ActionResult(ok=True, message=message, entry=entry)
-
-
-@router.get("/export")
-def export_entries() -> dict[str, Any]:
-    """导出检测报告清单：返回当前过滤条件下的全量数据。"""
-    items, total = service.list_entries(page=1, size=10000)
-    return {"module": "report", "total": total, "items": items}

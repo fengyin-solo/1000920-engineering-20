@@ -18,13 +18,54 @@
 │   ├── app/routers/          每个业务模块一组接口
 │   ├── app/services/         业务规则与状态流转
 │   └── app/store.py          内存数据仓库与示例数据
+├── scripts/                  本地一键联调（dev-up/dev-down）与签发链路检查
 ├── .gitignore
 └── docker-compose.yml
 ```
 
 ## 启动
 
-### 后端
+### 签发链路一键联调（推荐）
+
+报告编制、审核、签发三段跨前后端，推荐直接用工程化脚本，一条命令完成
+「依赖/端口预检 → 安装依赖 → 构建前端 → 拉起前后端 → 写入示例数据」：
+
+```bash
+make dev-up        # 等价于 scripts/dev-up.sh
+```
+
+脚本会：
+
+- 检查 `python3` / `node` / `npm`，缺失时打印对应安装方式并退出；
+- 检查后端 `8000`、前端 `5173` 端口，被占用时给出占用排查命令并退出
+  （可用 `BACKEND_PORT=xxxx make dev-up` 换端口）；
+- 按需创建 `backend/.venv`、安装前端依赖，并执行 `npm run build`
+  （含 `vue-tsc` 类型检查）；
+- 后台拉起 `uvicorn` 与 `vite preview`（跑构建产物，`/api` 代理到后端），
+  轮询健康检查与前后端联通性，日志在 `.run/logs/`，pid 在 `.run/*.pid`；
+- 后端是内存仓库，启动即写入示例数据：报告模块固定有
+  「待编制 / 待审核 / 待签发 / 已签发」各一条，含报告编号、编制人、审核人、
+  签发人（已签发条由 `周签发` 签发并带报告结论）。
+
+启动后打开 `http://127.0.0.1:5173/report` 即可逐段点「编制报告 / 审核通过 /
+签发报告」。停止服务：
+
+```bash
+make dev-down      # 等价于 scripts/dev-down.sh
+```
+
+签发完成后（或想随时复验），跑可复现检查脚本：它会新建一份报告，严格按
+待编制→待审核→待签发→已签发推进（跳步、缺结论等非法动作必须被拒绝），
+再从明细、列表、导出三个接口取回报告，逐字段比对报告结论与接口返回：
+
+```bash
+make check         # 等价于 scripts/check_report_chain.py
+```
+
+退出码 0 表示结论一致；也可显式指定地址：
+`scripts/check_report_chain.py --backend http://127.0.0.1:8000 --frontend http://127.0.0.1:5173`。
+
+### 后端（手工）
 
 ```bash
 cd backend
@@ -34,7 +75,7 @@ python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
 
 健康检查：`curl http://127.0.0.1:8000/api/health`
 
-### 前端
+### 前端（手工）
 
 ```bash
 cd frontend
@@ -44,6 +85,8 @@ npm run dev
 
 前端默认监听 `http://127.0.0.1:5173/`，dev server 不会自动打开浏览器，
 需要自己访问。`/api` 由 vite 代理到后端 `http://127.0.0.1:8000`。
+> 注意：手工分启两个服务时，示例数据只在后端进程内存里；重启后端即回到
+> `backend/app/seed.py` 的初始状态，不会有「忘记同步数据库」的问题。
 
 ## 业务模块
 
