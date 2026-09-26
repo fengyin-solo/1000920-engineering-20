@@ -70,7 +70,7 @@ import { request } from '@/api/client'
 type Row = Record<string, string | number | null>
 
 const ENDPOINT = '/api/report'
-const columns = ["报告编号", "关联任务", "编制人", "审核人", "签发人", "报告日期", "报告类型", "报告状态"]
+const columns = ["报告编号", "关联任务", "编制人", "审核人", "签发人", "报告日期", "报告类型", "报告结论", "报告状态"]
 const actions = ["编制报告", "审核通过", "签发报告"]
 const statuses = ["待编制", "待审核", "待签发", "已签发"]
 const stats = [{"label": "待编制报告", "value": 0}, {"label": "待审核报告", "value": 0}, {"label": "已签发报告", "value": 0}]
@@ -96,13 +96,19 @@ function openCreate() {
 
 async function runAction(action: string, row: Row) {
   errorMessage.value = ''
+  // 审核/签发必须带上经办人姓名，后端会把审核人、签发人落到记录里。
+  const actionValues: Record<string, string> = { action }
+  if (action === '审核通过') actionValues.审核人 = '陈建国'
+  if (action === '签发报告') actionValues.签发人 = '赵宏斌'
+  if (action === '编制报告') actionValues.报告结论 = '所测项目符合标准限值要求，同意出具报告'
   try {
     const response = await request(`${ENDPOINT}/${row.id}/actions`, {
       method: 'POST',
-      body: JSON.stringify({ action }),
+      body: JSON.stringify({ values: actionValues }),
     })
-    if (!response.ok) {
-      throw new Error('检测报告动作未生效，请稍后重试')
+    const payload = await response.json().catch(() => null) as { ok?: boolean; message?: string } | null
+    if (!response.ok || !payload || payload.ok === false) {
+      throw new Error(payload?.message || '检测报告动作未生效，请稍后重试')
     }
     await reload()
   } catch (error) {

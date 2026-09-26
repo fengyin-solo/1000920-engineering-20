@@ -18,7 +18,20 @@ export default defineConfig({
     port: 5173,
     // 关掉自动打开页面：起服务时只打印地址，不拉起浏览器
     open: false,
-    strictPort: false,
+    strictPort: true,
+    proxy: {
+      '/api': {
+        target: proxyTarget,
+        changeOrigin: true,
+      },
+    },
+  },
+  // 构建后用 vite preview 起本地服务联调，代理口径与 dev server 保持一致，
+  // 否则构建产物里的 /api 请求会直接打到 5173 自身而 404。
+  preview: {
+    host: '127.0.0.1',
+    port: 5173,
+    strictPort: true,
     proxy: {
       '/api': {
         target: proxyTarget,
